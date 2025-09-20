@@ -1,0 +1,43 @@
+# Core data processing
+xarray>=2023.1.0
+pandas>=1.5.0
+numpy>=1.21.0
+
+# File formats
+pyarrow>=10.0.0  # For Parquet support
+netcdf4>=1.6.0   # For NetCDF support
+
+# Streamlit web application
+streamlit>=1.28.0
+streamlit-folium>=0.15.0
+
+# Visualization
+plotly>=5.15.0
+folium>=0.14.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Database integration
+psycopg2-binary>=2.9.0  # PostgreSQL (optional)
+sqlalchemy>=1.4.0       # Database ORM
+# sqlite3 is built-in to Python
+
+# Vector databases (optional)
+faiss-cpu>=1.7.0        # FAISS for similarity search
+chromadb>=0.4.0         # Chroma vector database
+
+# LLM Integration (optional - system works without these)
+openai>=1.0.0           # OpenAI API (optional)
+anthropic>=0.3.0        # Anthropic Claude API (optional)
+transformers>=4.30.0    # Hugging Face transformers (optional)
+torch>=2.0.0           # PyTorch for local models (optional)
+
+# Natural Language Processing
+nltk>=3.8.0
+spacy>=3.6.0
+regex>=2023.6.3
+
+# Utilities
+python-dateutil>=2.8.0
+requests>=2.31.0
+python-dotenv>=1.0.0   # For environment variables
