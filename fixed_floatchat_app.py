@@ -13,7 +13,193 @@ from streamlit_folium import st_folium
 from datetime import datetime
 
 # Import our components
-from floatchat_system import FloatChatQueryProcessor, FloatChatVisualizer, load_sample_data_to_db
+# Removed dependency on deleted floatchat_system module
+import sqlite3
+from pathlib import Path
+
+class FloatChatQueryProcessor:
+    """Simple query processor for ARGO data"""
+    
+    def __init__(self, db_path: str = "argo_data.db"):
+        self.db_path = db_path
+        self.ensure_database()
+    
+    def ensure_database(self):
+        """Ensure database exists"""
+        if not Path(self.db_path).exists():
+            self.create_sample_database()
+    
+    def create_sample_database(self):
+        """Create sample database if no real data exists"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS argo_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                float_id TEXT,
+                latitude REAL,
+                longitude REAL,
+                date_time TEXT,
+                pressure REAL,
+                temperature REAL,
+                salinity REAL,
+                source_file TEXT
+            )
+        ''')
+        
+        # Create sample data
+        import numpy as np
+        np.random.seed(42)
+        sample_data = []
+        
+        for i in range(100):
+            depth = np.random.uniform(10, 1000)
+            temp = 25 - (depth / 50) + np.random.normal(0, 2)
+            
+            sample_data.append({
+                'float_id': f'SAMPLE_{i//25}',
+                'latitude': np.random.uniform(-30, 30),
+                'longitude': np.random.uniform(-50, 50),
+                'date_time': '2024-01-01',
+                'pressure': depth,
+                'temperature': temp,
+                'salinity': 35 + np.random.normal(0, 0.5),
+                'source_file': 'sample_data.nc'
+            })
+        
+        df = pd.DataFrame(sample_data)
+        df.to_sql('argo_profiles', conn, if_exists='replace', index=False)
+        conn.commit()
+        conn.close()
+    
+    def execute_query(self, sql_query: str) -> pd.DataFrame:
+        """Execute SQL query"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            df = pd.read_sql_query(sql_query, conn)
+            conn.close()
+            return df
+        except Exception as e:
+            return pd.DataFrame()
+    
+    def process_natural_language_query(self, user_query: str) -> dict:
+        """Process natural language query"""
+        query_lower = user_query.lower()
+        
+        sql_query = "SELECT * FROM argo_profiles WHERE 1=1"
+        conditions = []
+        
+        if 'temperature' in query_lower:
+            conditions.append("temperature IS NOT NULL")
+        if 'deep' in query_lower:
+            conditions.append("pressure > 500")
+        if 'shallow' in query_lower:
+            conditions.append("pressure < 100")
+        
+        if conditions:
+            sql_query += " AND " + " AND ".join(conditions)
+        
+        sql_query += " ORDER BY date_time DESC LIMIT 1000"
+        
+        results_df = self.execute_query(sql_query)
+        
+        return {
+            'success': True,
+            'results': results_df,
+            'sql_query': sql_query,
+            'parsed_query': {'keywords': query_lower.split()},
+            'message': f"Found {len(results_df)} matching profiles"
+        }
+
+class FloatChatVisualizer:
+    """Simple visualizer for ARGO data"""
+    
+    @staticmethod
+    def create_profile_plot(df: pd.DataFrame, parameter: str = 'temperature'):
+        """Create depth profile plot"""
+        if df.empty or parameter not in df.columns:
+            fig = go.Figure()
+            fig.add_annotation(text="No data available", x=0.5, y=0.5)
+            return fig
+        
+        fig = go.Figure()
+        
+        for float_id in df['float_id'].unique()[:5]:
+            float_data = df[df['float_id'] == float_id]
+            
+            fig.add_trace(go.Scatter(
+                x=float_data[parameter],
+                y=-float_data['pressure'],
+                mode='lines+markers',
+                name=f'Float {float_id}',
+                line=dict(width=2),
+                marker=dict(size=4)
+            ))
+        
+        fig.update_layout(
+            title=f'{parameter.title()} Profiles',
+            xaxis_title=f'{parameter.title()}',
+            yaxis_title='Depth (m)',
+            height=600
+        )
+        
+        return fig
+    
+    @staticmethod
+    def create_map_visualization(df: pd.DataFrame):
+        """Create map visualization"""
+        if df.empty or 'latitude' not in df.columns:
+            return None
+        
+        # Create a simple folium map
+        center_lat = df['latitude'].mean()
+        center_lon = df['longitude'].mean()
+        
+        m = folium.Map(location=[center_lat, center_lon], zoom_start=4)
+        
+        for idx, row in df.iterrows():
+            if idx > 50:  # Limit markers
+                break
+            folium.CircleMarker(
+                location=[row['latitude'], row['longitude']],
+                radius=5,
+                popup=f"Float: {row['float_id']}<br>Temp: {row.get('temperature', 'N/A')}°C",
+                color='blue',
+                fill=True
+            ).add_to(m)
+        
+        return m
+    
+    @staticmethod
+    def create_time_series_plot(df: pd.DataFrame, parameter: str = 'temperature'):
+        """Create time series plot"""
+        if df.empty or parameter not in df.columns:
+            fig = go.Figure()
+            fig.add_annotation(text="No data available", x=0.5, y=0.5)
+            return fig
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=pd.to_datetime(df['date_time']),
+            y=df[parameter],
+            mode='markers',
+            name=parameter.title()
+        ))
+        
+        fig.update_layout(
+            title=f'{parameter.title()} Time Series',
+            xaxis_title='Date',
+            yaxis_title=parameter.title(),
+            height=500
+        )
+        
+        return fig
+
+def load_sample_data_to_db():
+    """Load sample data - compatibility function"""
+    processor = FloatChatQueryProcessor()
+    return True
 
 def main():
     """Main Streamlit application"""
